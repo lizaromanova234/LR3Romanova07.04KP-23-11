@@ -21,7 +21,7 @@
 # Am_lst =[]
 # C_ost_lst=[]
 # for i in range(9):
-#   Am = (C-L)/T
+#   Am = (C-L)/T #что это означает? - это формула амортизации
 #   C_ost -= Am.subs({C:50000, T:9, L:0})
 #   Am_lst.append(round(Am.subs({C: 50000, T:9, L:0}),2))
 #   C_ost_lst.append(round(C_ost, 2))
@@ -32,19 +32,19 @@
 # Aj=0
 # C_ost = 50000
 # Am_lst_2=[]
-# C_ost_lst_2=[]
+# C_ost_lst_2=[] #Что это?
 # for i in range(9):
 #   Am = k*1/T*(C - Aj)
 #   C_ost -= Am.subs({C:50000, T:9, k:2})
 #   Am_lst_2.append(round(Am.subs({C:50000, T:9, k:2}), 2))
 #   Aj += Am
 #   C_ost_lst_2.append(round(C_ost,2))
-# print('Am_lst_2:', Am_lst_2)
+# print('Am_lst_2:', Am_lst_2) #Что это? - вывод списка амортизации
 # print('C_ost_lst_2:', C_ost_lst_2)
 
 # #Контейнер табличного вывода
 # import pandas as pd
-# Y = range(1, 10)
+# Y = range(1, 10) #Что это? - последовательность целых чисел от 1 до 9
 # table1 = list(zip(Y, C_ost_lst, Am_lst))
 # table2 = list(zip(Y, C_ost_lst_2, Am_lst_2))
 # tfame = pd.DataFrame(table1, columns = ['Y', 'C_ost_lst', 'Am_lst'])
@@ -57,21 +57,21 @@
 # import numpy as np
 # import matplotlib.pyplot as plt
 # plt.plot(tfame['Y'], tfame['C_ost_lst'], label='Am')
-# plt.savefig('chart7.png')
+# plt.savefig('chart7.png') #Что это? - сохранение графика 7 в файл
 # plt.figure()
 # plt.plot(tfame2['Y'], tfame2['C_ost_lst_2'], label='Am2')
 # plt.savefig('chart8.png')
-# plt.figure()
+# plt.figure() #Что это? - создание нового окна для графика
 
 # plt.figure()
-# vals = Am_lst
+# vals = Am_lst #Что это? - Присваивание переменной vals значения переменной Am_lst
 # labels = [str(x) for x in range(1,10)]
 # explode = (0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1)
 # fig, ax = plt.subplots()
 # ax.pie(vals, labels=labels, autopct='%1.1f%%', shadow=True, explode=explode, wedgeprops={'lw':1, 'ls':'--', 'edgecolor':"k"}, rotatelabels=True)
 # ax.axis("equal")
 # plt.savefig('chart9.png')
-# plt.figure()
+# plt.figure() #что это? - создание нового окна для графика
 
 # plt.figure()
 # vals = Am_lst_2
@@ -81,7 +81,7 @@
 # ax.pie(vals, labels=labels, autopct='%1.1f%%', shadow=True, explode=explode, wedgeprops={'lw':1, 'ls':'--', 'edgecolor':"k"}, rotatelabels=True)
 # ax.axis("equal")
 # plt.savefig('chart10.png')
-# plt.clf()
+# plt.clf() #Что это? - очистка текущего графика
 # plt.figure()
 
 
@@ -92,9 +92,14 @@
 # plt.bar(tfame['Y'], tfame['Am_lst'])
 # plt.savefig('chart11.jpeg')
 # plt.figure()
-# plt.bar(tfame2['Y'], tfame2['Am_lst_2'])
+# plt.bar(tfame2['Y'], tfame2['Am_lst_2']) #Что это? - построение столбчатой диаграммы
 # plt.savefig('chart12.jpeg')
 # plt.figure()
+
+#Проверила Глухова Анна, все супер!!! 100/100!
+#Были изменены переменные и добавлены комментарии 
+#Анна Глухова отвечала на вопросы
+#Оценка ответов на вопросы 5/5, проверила Романова Елизавета.
 
 
 #Индивидуальное задание лр 3
