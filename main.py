@@ -197,22 +197,11 @@
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
-
 # 1. ПОЛУЧЕНИЕ СЕКРЕТНЫХ КЛЮЧЕЙ
-
 C2_BLACKLIST_API_KEY = os.environ.get("C2_BLACKLIST_API_KEY", "КЛЮЧ НЕ НАЙДЕН")
 THREAT_INTELLIGENCE_KEY = os.environ.get("THREAT_INTELLIGENCE_KEY", "КЛЮЧ НЕ НАЙДЕН")
 MONITORING_TOKEN = os.environ.get("MONITORING_TOKEN", "КЛЮЧ НЕ НАЙДЕН")
-
-
-print("ЗАГРУЖЕННЫЕ СЕКРЕТНЫЕ КЛЮЧИ:")
-print(f"C2_BLACKLIST_API_KEY: {C2_BLACKLIST_API_KEY[:10] if C2_BLACKLIST_API_KEY != 'КЛЮЧ НЕ НАЙДЕН' else 'КЛЮЧ НЕ НАЙДЕН'}...")
-print(f"THREAT_INTELLIGENCE_KEY: {THREAT_INTELLIGENCE_KEY[:10] if THREAT_INTELLIGENCE_KEY != 'КЛЮЧ НЕ НАЙДЕН' else 'КЛЮЧ НЕ НАЙДЕН'}...")
-print(f"MONITORING_TOKEN: {MONITORING_TOKEN[:10] if MONITORING_TOKEN != 'КЛЮЧ НЕ НАЙДЕН' else 'КЛЮЧ НЕ НАЙДЕН'}...")
-
 # 2. ИСХОДНЫЕ ДАННЫЕ 
-
-# Список IP-адресов (10 разных адресов)
 ip_addresses = [
     "185.130.5.253",   # C&C сервер
     "8.8.8.8",         # DNS Google (безопасный)
@@ -225,162 +214,169 @@ ip_addresses = [
     "5.188.86.45",     # C&C сервер
     "208.67.222.222"   # DNS OpenDNS (безопасный)
 ]
-
-# ЧЁРНЫЙ СПИСОК C&C серверов
+# Чёрный список C&C серверов
 if C2_BLACKLIST_API_KEY != "КЛЮЧ НЕ НАЙДЕН":
     C2_SERVERS = ["185.130.5.253", "94.23.15.12", "193.42.4.1", 
                   "176.9.75.45", "89.45.87.12", "5.188.86.45",
                   "45.155.205.233", "103.25.14.78"]  
-    print("\n[+] Используется расширенный список C&C серверов (API ключ активен)")
 else:
     C2_SERVERS = ["185.130.5.253", "94.23.15.12", "193.42.4.1"]
-    print("\n[-] Используется базовый список C&C серверов")
-
 n = len(ip_addresses)
-
-# ФАКТОРЫ РИСКА
-connections_count = [250, 45, 180, 30, 500, 15, 75, 320, 150, 60]   #количество соединений
-suspicious_port =   [1,   0,  1,   0,  1,   0,  0,  1,   1,   0]    #подозрительные порты
-unknown_process =   [1,   0,  1,   0,  1,   0,  0,  1,   0,   0]    #подозрительные процессы
-high_traffic =      [1,   0,  0,   0,  1,   0,  1,  1,   1,   0]    #высокий трафик
-night_activity =    [1,   1,  0,   1,  1,   0,  1,  0,   1,   1]    #ночная активность
-
-
-# 3. ОПРЕДЕЛЕНИЕ C&C СЕРВЕРОВ
-
-c2_server = []
-for i in range(n):
-    if ip_addresses[i] in C2_SERVERS:
-        c2_server.append(1)
-        if THREAT_INTELLIGENCE_KEY != "КЛЮЧ НЕ НАЙДЕН":
-            print(f"   [!] IP {ip_addresses[i]} обнаружен в базе C&C серверов")
+# Факторы риска
+connections_count = [250, 45, 180, 30, 500, 15, 75, 320, 150, 60]
+suspicious_port   = [1,   0,  1,   0,  1,   0,  0,  1,   1,   0]
+unknown_process   = [1,   0,  1,   0,  1,   0,  0,  1,   0,   0]
+high_traffic      = [1,   0,  0,   0,  1,   0,  1,  1,   1,   0]
+night_activity    = [1,   1,  0,   1,  1,   0,  1,  0,   1,   1]
+# 3. ФУНКЦИЯ РАСЧЁТА
+def calculate():
+    n_local = len(ip_addresses)
+    if n_local == 0:
+        return pd.DataFrame(), {"ALLOW": 0, "BLOCK": 0}
+    # Проверка согласованности длин списков
+    expected_len = n_local
+    for name, lst in [("connections_count", connections_count),
+                      ("suspicious_port", suspicious_port),
+                      ("unknown_process", unknown_process),
+                      ("high_traffic", high_traffic),
+                      ("night_activity", night_activity)]:
+        if len(lst) != expected_len:
+            raise ValueError(f"Список {name} имеет длину {len(lst)}, ожидается {expected_len}")
+    c2_server = []
+    for i in range(n_local):
+        if ip_addresses[i] in C2_SERVERS:
+            c2_server.append(1)
+        else:
+            c2_server.append(0)
+    threat_level = []
+    decision = []
+    for i in range(n_local):
+        threat = 0
+        if connections_count[i] > 100: threat += 1
+        if suspicious_port[i] == 1: threat += 1
+        if unknown_process[i] == 1: threat += 2
+        if high_traffic[i] == 1: threat += 1
+        if c2_server[i] == 1: threat += 3
+        if night_activity[i] == 1: threat += 1
+        threat_level.append(threat)
+        decision.append("BLOCK" if threat >= 3 else "ALLOW")
+    data = list(zip(range(1, n_local+1), ip_addresses, connections_count, 
+                    suspicious_port, unknown_process, high_traffic, 
+                    c2_server, night_activity, threat_level, decision))
+    df = pd.DataFrame(data, columns=[
+        "ID", "IP адрес", "Соединений", "Подозр. порт",
+        "Подозр. процесс", "Высокий трафик", "C&C сервер",
+        "Ночная активность", "Уровень угрозы", "Решение"
+    ])
+    stats = {"ALLOW": decision.count("ALLOW"), "BLOCK": decision.count("BLOCK")}
+    return df, stats
+# 4. ТАБЛИЧНОЕ ПРЕДСТАВЛЕНИЕ
+def display_table(df, stats):
+    if df.empty:
+        print("Нет данных для отображения")
+        return
+    print("\n" + " "*140)
+    print("РЕЗУЛЬТАТЫ АНАЛИЗА СЕТЕВОЙ АКТИВНОСТИ")
+    print("Защита от скрытного включения в бот-сеть (Вариант 12)")
+    print(df.to_string(index=False))
+    print("\n" + " "*140)
+    print("СТАТИСТИКА РЕШЕНИЙ:")
+    print(f"   ALLOW (разрешено):  {stats['ALLOW']} соединений")
+    print(f"   BLOCK (заблокировано): {stats['BLOCK']} соединений")
+# 5. ОТПРАВКА МЕТРИК
+def send_metrics(df):
+    if df.empty:
+        print("Нет данных для отправки метрик")
+        return
+    if MONITORING_TOKEN != "КЛЮЧ НЕ НАЙДЕН":
+        blocked_count = len(df[df["Решение"] == "BLOCK"])
+        allowed_count = len(df[df["Решение"] == "ALLOW"])
+        threat_level = df["Уровень угрозы"].tolist()
+        print(f"\n[+] Отправка метрик в Prometheus (токен: {MONITORING_TOKEN[:8]}...):")
+        print(f"   - bot_activity_blocked_total: {blocked_count}")
+        print(f"   - bot_activity_allowed_total: {allowed_count}")
+        print(f"   - threat_level_max: {max(threat_level)}")
+        print(f"   - threat_level_avg: {sum(threat_level)/len(threat_level):.1f}")
     else:
-        c2_server.append(0)
-
-
-# 4. РАСЧЁТ УГРОЗЫ
-
-threat_level = []
-decision = []
-
-for i in range(n):
-    threat = 0
-
-    if connections_count[i] > 100:
-        threat += 1
-    if suspicious_port[i] == 1:
-        threat += 1
-    if unknown_process[i] == 1:
-        threat += 2
-    if high_traffic[i] == 1:
-        threat += 1
-    if c2_server[i] == 1:
-        threat += 3
-    if night_activity[i] == 1:
-        threat += 1
-
-    threat_level.append(threat)
-    decision.append("BLOCK" if threat >= 3 else "ALLOW")
-
-# 5. ТАБЛИЦА РЕЗУЛЬТАТОВ
-
-data = list(zip(range(1, n+1), ip_addresses, connections_count, 
-                suspicious_port, unknown_process, high_traffic, 
-                c2_server, night_activity, threat_level, decision))
-
-df = pd.DataFrame(data, columns=[
-    "ID", "IP адрес", "Соединений", "Подозр. порт",
-    "Подозр. процесс", "Высокий трафик", "C&C сервер",
-    "Ночная активность", "Уровень угрозы", "Решение"
-])
-
-print("\n" + "-"*140)
-print("РЕЗУЛЬТАТЫ АНАЛИЗА СЕТЕВОЙ АКТИВНОСТИ")
-print("Защита от скрытного включения в бот-сеть (Вариант 12)")
-print(df.to_string(index=False))
-print("\n" + "-"*140)
-print("СТАТИСТИКА РЕШЕНИЙ:")
-stats = df["Решение"].value_counts()
-print(f"   ALLOW (разрешено):  {stats.get('ALLOW', 0)} соединений")
-print(f"   BLOCK (заблокировано): {stats.get('BLOCK', 0)} соединений")
-
-# 6. ОТПРАВКА МЕТРИК 
-
-if MONITORING_TOKEN != "КЛЮЧ НЕ НАЙДЕН":
-    blocked_count = len(df[df["Решение"] == "BLOCK"])
-    allowed_count = len(df[df["Решение"] == "ALLOW"])
-    print(f"\n[+] Отправка метрик в Prometheus (токен: {MONITORING_TOKEN[:8]}...):")
-    print(f"   - bot_activity_blocked_total: {blocked_count}")
-    print(f"   - bot_activity_allowed_total: {allowed_count}")
-    print(f"   - threat_level_max: {max(threat_level)}")
-    print(f"   - threat_level_avg: {sum(threat_level)/len(threat_level):.1f}")
-else:
-    print("\n[-] MONITORING_TOKEN отсутствует, метрики не отправлены")
-
-
-# 7. ВИЗУАЛИЗАЦИЯ
-
-plt.style.use('ggplot')
-
-# График 1: Количество соединений
-plt.figure(figsize=(14, 6))
-colors_line = ['red' if c2_server[i]==1 else 'blue' for i in range(n)]
-plt.bar(ip_addresses, connections_count, color=colors_line, alpha=0.7)
-plt.title("Количество сетевых соединений по IP-адресам (красный = C&C сервер)", fontsize=14)
-plt.xlabel("IP-адрес", fontsize=12)
-plt.ylabel("Количество соединений", fontsize=12)
-plt.xticks(rotation=45, ha="right")
-plt.grid(True, linestyle='--', alpha=0.5)
-plt.tight_layout()
-plt.savefig("chart_connections.png")
-plt.close()
-
-# График 2: Уровень угрозы
-plt.figure(figsize=(14, 6))
-plt.bar(ip_addresses, threat_level, color='orange', edgecolor='black')
-plt.title("Уровень угрозы по IP-адресам", fontsize=14)
-plt.xlabel("IP-адрес", fontsize=12)
-plt.ylabel("Уровень угрозы (баллы)", fontsize=12)
-plt.xticks(rotation=45, ha="right")
-plt.axhline(y=3, color='red', linestyle='--', label='Порог блокировки (3 балла)')
-plt.legend()
-plt.grid(True, linestyle='--', alpha=0.5)
-plt.tight_layout()
-plt.savefig("chart_threat.png")
-plt.close()
-
-# График 3: Круговая диаграмма решений
-plt.figure(figsize=(8, 8))
-decision_counts = df["Решение"].value_counts()
-labels = ["Разрешить (ALLOW)", "Заблокировать (BLOCK)"]
-sizes = [decision_counts.get("ALLOW", 0), decision_counts.get("BLOCK", 0)]
-colors_pie = ['#66b3ff', '#ff6666']
-explode = (0.05, 0.1)
-plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90,
-        shadow=True, explode=explode, colors=colors_pie)
-plt.title("Распределение решений контейнера безопасности", fontsize=14)
-plt.savefig("chart_pie.png")
-plt.close()
-
-# График 4: Факторы риска (суммарно)
-plt.figure(figsize=(10, 6))
-risk_factors = df[["Подозр. порт", "Подозр. процесс", "Высокий трафик", 
-                   "C&C сервер", "Ночная активность"]].sum()
-risk_factors.plot(kind='bar', color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
-plt.title("Суммарные срабатывания факторов риска", fontsize=14)
-plt.ylabel("Количество случаев (из 10 IP)", fontsize=12)
-plt.xticks(rotation=45)
-plt.grid(axis='y', linestyle='--', alpha=0.5)
-for i, v in enumerate(risk_factors):
-    plt.text(i, v + 0.5, str(v), ha='center', fontsize=10)
-plt.tight_layout()
-plt.savefig("chart_risk_factors.png")
-plt.close()
-
-print("\n" + "-"*40)
-print("СОЗДАННЫЕ ГРАФИКИ:")
-print("  - chart_connections.png")
-print("  - chart_threat.png")
-print("  - chart_pie.png")
-print("  - chart_risk_factors.png")
-print("\nРАБОТА КОНТЕЙНЕРОВ ЗАВЕРШЕНА")
+        print("\n[-] MONITORING_TOKEN отсутствует, метрики не отправлены")
+# 6. ВИЗУАЛИЗАЦИЯ
+def visualize(df):
+    if df.empty:
+        print("Нет данных для визуализации")
+        return
+    plt.style.use('ggplot')
+    # График 1: Количество соединений
+    plt.figure(figsize=(14, 6))
+    colors_line = ['red' if val==1 else 'blue' for val in df["C&C сервер"]]
+    plt.bar(df["IP адрес"], df["Соединений"], color=colors_line, alpha=0.7)
+    plt.title("Количество сетевых соединений по IP-адресам (красный = C&C сервер)", fontsize=14)
+    plt.xlabel("IP-адрес", fontsize=12)
+    plt.ylabel("Количество соединений", fontsize=12)
+    plt.xticks(rotation=45, ha="right")
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.savefig("chart_connections.png")
+    plt.close()
+    # График 2: Уровень угрозы
+    plt.figure(figsize=(14, 6))
+    plt.bar(df["IP адрес"], df["Уровень угрозы"], color='orange', edgecolor='black')
+    plt.title("Уровень угрозы по IP-адресам", fontsize=14)
+    plt.xlabel("IP-адрес", fontsize=12)
+    plt.ylabel("Уровень угрозы (баллы)", fontsize=12)
+    plt.xticks(rotation=45, ha="right")
+    plt.axhline(y=3, color='red', linestyle='--', label='Порог блокировки (3 балла)')
+    plt.legend()
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+    plt.savefig("chart_threat.png")
+    plt.close()
+    # График 3: Круговая диаграмма решений
+    plt.figure(figsize=(8, 8))
+    decision_counts = df["Решение"].value_counts()
+    labels = ["Разрешить (ALLOW)", "Заблокировать (BLOCK)"]
+    sizes = [decision_counts.get("ALLOW", 0), decision_counts.get("BLOCK", 0)]
+    colors_pie = ['#66b3ff', '#ff6666']
+    explode = (0.05, 0.1)
+    plt.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90,
+            shadow=True, explode=explode, colors=colors_pie)
+    plt.title("Распределение решений контейнера безопасности", fontsize=14)
+    plt.savefig("chart_pie.png")
+    plt.close()
+    # График 4: Факторы риска (суммарно)
+    plt.figure(figsize=(10, 6))
+    risk_factors = df[["Подозр. порт", "Подозр. процесс", "Высокий трафик", 
+                       "C&C сервер", "Ночная активность"]].sum()
+    risk_factors.plot(kind='bar', color=['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
+    plt.title("Суммарные срабатывания факторов риска", fontsize=14)
+    plt.ylabel("Количество случаев (из 10 IP)", fontsize=12)
+    plt.xticks(rotation=45)
+    plt.grid(axis='y', linestyle='--', alpha=0.5)
+    for i, v in enumerate(risk_factors):
+        plt.text(i, v + 0.5, str(v), ha='center', fontsize=10)
+    plt.tight_layout()
+    plt.savefig("chart_risk_factors.png")
+    plt.close()
+    print("\n" + " "*40)
+    print("СОЗДАННЫЕ ГРАФИКИ:")
+    print("  - chart_connections.png")
+    print("  - chart_threat.png")
+    print("  - chart_pie.png")
+    print("  - chart_risk_factors.png")
+# 7. ТОЧКА ВХОДА ПРИ ЗАПУСКЕ
+if __name__ == "__main__":
+    print("ЗАГРУЖЕННЫЕ СЕКРЕТНЫЕ КЛЮЧИ:")
+    print(f"C2_BLACKLIST_API_KEY: {C2_BLACKLIST_API_KEY[:10] if C2_BLACKLIST_API_KEY != 'КЛЮЧ НЕ НАЙДЕН' else 'КЛЮЧ НЕ НАЙДЕН'}...")
+    print(f"THREAT_INTELLIGENCE_KEY: {THREAT_INTELLIGENCE_KEY[:10] if THREAT_INTELLIGENCE_KEY != 'КЛЮЧ НЕ НАЙДЕН' else 'КЛЮЧ НЕ НАЙДЕН'}...")
+    print(f"MONITORING_TOKEN: {MONITORING_TOKEN[:10] if MONITORING_TOKEN != 'КЛЮЧ НЕ НАЙДЕН' else 'КЛЮЧ НЕ НАЙДЕН'}...")
+    if C2_BLACKLIST_API_KEY != "КЛЮЧ НЕ НАЙДЕН":
+        print("\n[+] Используется расширенный список C&C серверов (API ключ активен)")
+    else:
+        print("\n[-] Используется базовый список C&C серверов")
+    df, stats = calculate()
+    display_table(df, stats)
+    if not df.empty:
+        send_metrics(df)
+        visualize(df)
+    else:
+        print("Нет данных для отправки метрик и визуализации.")
+    print("\nРАБОТА КОНТЕЙНЕРОВ ЗАВЕРШЕНА")
